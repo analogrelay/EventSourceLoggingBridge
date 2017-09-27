@@ -6,5 +6,6 @@ namespace Microsoft.Extensions.Logging
     public interface ITracingAdaptorConfig
     {
         ITracingAdaptorConfig EnableEventSource(string eventSourceName, EventLevel minLevel, EventKeywords keywords, IDictionary<string, string> arguments);
+        ITracingAdaptorConfig EnableDiagnosticSource(string diagnosticSourceName, IReadOnlyList<string> enabledEventNames);
     }
 }

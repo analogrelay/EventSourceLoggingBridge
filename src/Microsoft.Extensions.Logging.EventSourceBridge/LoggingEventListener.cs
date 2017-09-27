@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.Linq;
-using System.Text;
 
 namespace Microsoft.Extensions.Logging.EventSourceBridge
 {
@@ -68,7 +67,7 @@ namespace Microsoft.Extensions.Logging.EventSourceBridge
                     return evt.Event.Payload[messageIndex] as string ?? string.Empty;
                 }
 
-                return GenerateMessage(evt);
+                return MessageUtils.GenerateMessage(evt.Event.EventName, evt);
             }
             catch (Exception ex)
             {
@@ -77,22 +76,6 @@ namespace Microsoft.Extensions.Logging.EventSourceBridge
                 // Swallow the exception.
                 return string.Empty;
             }
-        }
-
-        private string GenerateMessage(EventData evt)
-        {
-            var builder = new StringBuilder();
-            builder.Append(evt.Event.EventName);
-            builder.Append(":");
-            foreach (var pair in evt)
-            {
-                builder.Append(pair.Key);
-                builder.Append("=");
-                builder.Append(pair.Value.ToString());
-                builder.Append(",");
-            }
-            builder.Length -= 1;
-            return builder.ToString();
         }
     }
 }

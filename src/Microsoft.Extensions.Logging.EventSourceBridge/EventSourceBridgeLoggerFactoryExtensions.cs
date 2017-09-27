@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using Microsoft.Extensions.Logging.EventSourceBridge;
 
@@ -16,13 +17,14 @@ namespace Microsoft.Extensions.Logging
         /// <returns>The logger factory</returns>
         public static ILoggerFactory ImportEventSources(this ILoggerFactory loggerFactory, Action<ITracingAdaptorConfig> configure)
         {
-            var sources = new EventSourceListener();
+            var eventSources = new EventSourceListener();
 
             var builder = new TracingAdaptorConfig(loggerFactory);
 
             configure(builder);
 
-            sources.Sources.Subscribe(builder);
+            eventSources.Sources.Subscribe(builder);
+            DiagnosticListener.AllListeners.Subscribe(builder);
 
             return loggerFactory;
         }
