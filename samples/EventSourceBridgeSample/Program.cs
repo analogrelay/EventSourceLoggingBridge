@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Diagnostics.Tracing;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -9,6 +10,14 @@ namespace EventSourceBridgeSample
 {
     class Program
     {
+        public static readonly string ArrayPoolEventSourceName = "System.Buffers.ArrayPoolEventSource";
+        public static readonly string TplEventSourceName = "System.Threading.Tasks.TplEventSource";
+        public static readonly string ConcurrentCollectionsEventSourceName = "System.Collections.Concurrent.ConcurrentCollectionsEventSource";
+        public static readonly string FrameworkEventSourceName = "System.Diagnostics.Eventing.FrameworkEventSource";
+        public static readonly string SystemNetPrimitivesEventSourceName = "Microsoft-System-Net-Primitives";
+        public static readonly string SystemNetHttpEventSourceName = "Microsoft-System-Net-Http";
+        public static readonly string DiagnosticSourceEventSourceName = "Microsoft-Diagnostics-DiagnosticsSource";
+
         static void Main(string[] args)
         {
             var serviceCollection = new ServiceCollection()
@@ -19,19 +28,20 @@ namespace EventSourceBridgeSample
                     builder.AddConsole();
                 });
 
-            // providers may be added to a LoggerFactory before any loggers are created
-
-
             var serviceProvider = serviceCollection.BuildServiceProvider();
 
             var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
-            loggerFactory.ImportEventSources();
+            loggerFactory.ImportEventSources(config =>
+                //{ });
+                config
+                    .EnableEventSource(SystemNetHttpEventSourceName, EventLevel.Verbose)
+                    .EnableEventSource(DiagnosticSourceEventSourceName, EventLevel.Verbose));
 
             TestEventSource.Log.TestEvent("foo", 42);
             TestEventSource.Log.TestEvent("bar", 24);
 
             // ArrayPool has an EventSource
-            // So does TPL
+            // So does TPL, but we haven't attached to it.
             Task.Run(() =>
             {
                 var pool = ArrayPool<string>.Create();
@@ -40,7 +50,10 @@ namespace EventSourceBridgeSample
                 pooledArray = pool.Rent(5);
             }).Wait();
 
-            Console.ReadLine();
+            // Http Client also has one. Do an Http
+            var client = new HttpClient();
+            var resp = client.GetAsync("https://www.bing.com").Result;
+            resp.EnsureSuccessStatusCode();
         }
 
         private class TestEventSource : EventSource

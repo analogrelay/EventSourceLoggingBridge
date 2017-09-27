@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.Tracing;
+using Microsoft.Extensions.Logging.EventSourceBridge;
 
 namespace Microsoft.Extensions.Logging
 {
@@ -13,9 +14,16 @@ namespace Microsoft.Extensions.Logging
         /// </summary>
         /// <param name="loggerFactory">The <see cref="ILoggerFactory"/> to forward events to</param>
         /// <returns>The logger factory</returns>
-        public static ILoggerFactory ImportEventSources(this ILoggerFactory loggerFactory)
+        public static ILoggerFactory ImportEventSources(this ILoggerFactory loggerFactory, Action<ITracingAdaptorConfig> configure)
         {
-            new LoggingEventListener(loggerFactory);
+            var sources = new EventSourceListener();
+
+            var builder = new TracingAdaptorConfig(loggerFactory);
+
+            configure(builder);
+
+            sources.Sources.Subscribe(builder);
+
             return loggerFactory;
         }
     }

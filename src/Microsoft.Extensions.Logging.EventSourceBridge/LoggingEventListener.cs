@@ -1,37 +1,29 @@
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.Linq;
 using System.Text;
-using System.Threading;
 
-namespace Microsoft.Extensions.Logging
+namespace Microsoft.Extensions.Logging.EventSourceBridge
 {
-    internal class LoggingEventListener : EventListener, IEventSourceImporterConfig
+    internal class LoggerEventListener : EventListener
     {
-        private readonly ILoggerFactory _loggerFactory;
+        private ILogger _logger;
 
-        private ConcurrentDictionary<string, ILogger> _loggers = new ConcurrentDictionary<string, ILogger>();
-
-        public LoggingEventListener(ILoggerFactory loggerFactory)
+        public LoggerEventListener(ILogger logger, EventSource eventSource, EventLevel minLevel, EventKeywords keywords, IDictionary<string, string> arguments)
         {
-            _loggerFactory = loggerFactory;
-        }
+            _logger = logger;
 
-        protected override void OnEventSourceCreated(EventSource eventSource)
-        {
-            // For now, let's just import ALL THE EVENTSOURCES!
-            Console.WriteLine($"Attaching to: {eventSource.Name}");
-            EnableEvents(eventSource, EventLevel.Verbose);
+            EnableEvents(eventSource, minLevel, keywords, arguments);
         }
 
         protected override void OnEventWritten(EventWrittenEventArgs eventData)
         {
-            var logger = _loggers.GetOrAdd(eventData.EventSource.Name, name => _loggerFactory.CreateLogger(name));
             var eventName = eventData.Opcode == EventOpcode.Info ?
                 eventData.EventName :
                 $"{eventData.EventName}/{eventData.Opcode}";
-            logger.Log(
+            _logger.Log(
                 MapLogLevel(eventData.Level),
                 new EventId(eventData.EventId, eventName),
                 new EventData(eventData),
@@ -58,17 +50,41 @@ namespace Microsoft.Extensions.Logging
             }
         }
 
-        // TODO: OMG TOARRAY I'M SORRY.
-        private string FormatEventData(EventData evt, Exception ex) => string.IsNullOrEmpty(evt.Event.Message) ?
-            GenerateMessage(evt) :
-            string.Format(evt.Event.Message, evt.Event.Payload.ToArray());
+        // We never pass an exception to the logger, so the Exception argument will always be null
+        private string FormatEventData(EventData evt, Exception _)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(evt.Event.Message))
+                {
+                    // Ugh, we have to ToArray the payload to put it in string.Format. But let's do it only if the type isn't actually an object[]
+                    return string.Format(evt.Event.Message, evt.Event.Payload.ToArray());
+                }
+
+                var messageIndex = evt.Event.PayloadNames.IndexOf("message");
+                if(messageIndex >= 0)
+                {
+                    Debug.Assert(messageIndex < evt.Event.Payload.Count && messageIndex > 0);
+                    return evt.Event.Payload[messageIndex] as string ?? string.Empty;
+                }
+
+                return GenerateMessage(evt);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error formatting event: {providerName}({provderId})/{eventName}({eventId})", evt.Event.EventSource.Name, evt.Event.EventSource.Guid, evt.Event.EventName, evt.Event.EventId);
+
+                // Swallow the exception.
+                return string.Empty;
+            }
+        }
 
         private string GenerateMessage(EventData evt)
         {
             var builder = new StringBuilder();
             builder.Append(evt.Event.EventName);
             builder.Append(":");
-            foreach(var pair in evt)
+            foreach (var pair in evt)
             {
                 builder.Append(pair.Key);
                 builder.Append("=");
